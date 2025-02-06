@@ -8,6 +8,7 @@ const port = 6790;
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // JSON parsing middleware
