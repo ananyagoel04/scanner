@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
         #images {
             margin-top: 20px;
         }
+
         .scanned {
             margin: 10px;
             max-width: 100%;
@@ -15,11 +17,12 @@
         }
     </style>
 </head>
+
 <body>
     <h1>Upload Image - Scan or From URL</h1>
 
     <!-- Option to scan an image -->
-    <!-- tesing -->
+
     <button type="button" onclick="scanAndSend();">Scan and Send to Extension</button>
 
     <!-- Option to upload a file from URL -->
@@ -32,19 +35,17 @@
     <script type="text/javascript" src="https://cdn.asprise.com/scannerjs/scanner.js"></script>
 
     <script>
-        // Function to start scanning and send the image to the server
         function scanAndSend() {
             scanner.scan(displayImagesOnPage, {
                 "output_settings": [
                     {
-                        "type": "return-base64",  // Send the scanned image as base64
+                        "type": "return-base64",
                         "format": "jpg"
                     }
                 ]
             });
         }
 
-        // Callback to handle the scanned images
         function displayImagesOnPage(successful, mesg, response) {
             if (!successful) {
                 console.error('Failed: ' + mesg);
@@ -56,34 +57,28 @@
                 return;
             }
 
-            // Get the scanned images from the response
-            var scannedImages = scanner.getScannedImages(response, true, false); // Get array of scanned images
+            var scannedImages = scanner.getScannedImages(response, true, false);
 
-            // Process and display the scanned image
             for (var i = 0; i < scannedImages.length; i++) {
                 var scannedImage = scannedImages[i];
                 processScannedImage(scannedImage);
-                
-                // Send the image to the server
+
                 sendImageToServer(scannedImage);
             }
         }
 
-        // Function to process and display a scanned image
         function processScannedImage(scannedImage) {
             var elementImg = createDomElementFromModel({
                 'name': 'img',
                 'attributes': {
                     'class': 'scanned',
-                    'src': scannedImage.src // The base64 image data
+                    'src': scannedImage.src
                 }
             });
 
-            // Append the image to the "images" div
             document.getElementById('images').appendChild(elementImg);
         }
 
-        // Helper function to create DOM elements
         function createDomElementFromModel(model) {
             var element = document.createElement(model.name);
             for (var attr in model.attributes) {
@@ -92,51 +87,42 @@
             return element;
         }
 
-        // Function to send the scanned image to the server
         function sendImageToServer(scannedImage) {
-            var imageData = scannedImage.src.split(',')[1]; // Get the base64 part of the image
+            var imageData = scannedImage.src.split(',')[1];
 
-            // Prepare the data to send to the server
             var postData = {
                 image: imageData,
                 mimeType: 'image/jpeg',
                 fileName: 'scanned_image.jpg'
             };
 
-            // Send the image to the server using fetch
-            fetch('http://localhost:6090/uploadImage', {
+            fetch('https://extention-server.vercel.app/uploadImage', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(postData)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Image uploaded successfully');
-                    
-                    // Send the image data to the extension (e.g., for file insertion or other uses)
-                    sendToExtension(data);
-                } else {
-                    console.error('Failed to upload image:', data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error uploading image:', error);
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Image uploaded successfully');
+                        sendToExtension(data);
+                    } else {
+                        console.error('Failed to upload image:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error uploading image:', error);
+                });
         }
-
-        // Function to send image data to the extension
         function sendToExtension(data) {
-            // Send message to extension (could be to store or use image)
             chrome.runtime.sendMessage({
                 action: 'storeImage',
                 image: data
             });
         }
 
-        // Function to upload image from a URL
         function uploadImageFromUrl() {
             var imageUrl = prompt("Please enter the image URL:");
 
@@ -146,41 +132,37 @@
             }
 
             fetch(imageUrl)
-                .then(response => response.blob()) // Get the image as a Blob
+                .then(response => response.blob())
                 .then(blob => {
                     var reader = new FileReader();
                     reader.onloadend = function () {
-                        var base64Image = reader.result.split(',')[1]; // Extract base64 string from the result
-
-                        // Prepare the data to send to the server
+                        var base64Image = reader.result.split(',')[1];
                         var postData = {
                             image: base64Image,
                             mimeType: blob.type,
-                            fileName: imageUrl.split('/').pop() // Use the URL's last part as the file name
+                            fileName: imageUrl.split('/').pop()
                         };
 
-                        // Send the image to the server using fetch
-                        fetch('http://localhost:6090/uploadImage', {
+                        fetch('https://extention-server.vercel.app/uploadImage', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify(postData)
                         })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                console.log('Image uploaded successfully from URL');
-                                
-                                // Send the image data to the extension (e.g., for file insertion or other uses)
-                                sendToExtension(data);
-                            } else {
-                                console.error('Failed to upload image:', data.message);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error uploading image:', error);
-                        });
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    console.log('Image uploaded successfully from URL');
+                                    alert('Image uploaded successfully!');
+                                    sendToExtension(data);
+                                } else {
+                                    console.error('Failed to upload image:', data.message);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error uploading image:', error);
+                            });
                     };
                     reader.readAsDataURL(blob);
                 })
@@ -190,4 +172,5 @@
         }
     </script>
 </body>
+
 </html>
