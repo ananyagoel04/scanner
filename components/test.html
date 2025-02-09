@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner.js Demo with URL and Scan Options</title>
+    <title>Upload Image from URL or Scanner</title>
     <style>
         #images {
             margin-top: 20px;
@@ -19,110 +19,28 @@
 </head>
 
 <body>
-    <h1>Upload Image - Scan or From URL</h1>
+    <h1>Upload Image from URL or Scanner</h1>
 
-    <!-- Option to scan an image -->
-
-    <button type="button" onclick="scanAndSend();">Scan and Send to Extension</button>
-
-    <!-- Option to upload a file from URL -->
+    <!-- Option to upload an image from URL -->
     <button type="button" onclick="uploadImageFromUrl();">Upload Image from URL</button>
 
-    <!-- Container to display scanned images -->
+    <!-- Option to scan an image -->
+    <button type="button" onclick="scanToJpg();">Scan Image</button>
+
+    <!-- Container to display uploaded or scanned image -->
     <div id="images"></div>
 
-    <!-- Include the scanner.js library -->
-    <script type="text/javascript" src="https://cdn.asprise.com/scannerjs/scanner.js"></script>
+    <script src="https://cdn.asprise.com/scannerjs/scanner.js" type="text/javascript"></script>
 
     <script>
-        function scanAndSend() {
-            scanner.scan(displayImagesOnPage, {
-                "output_settings": [
-                    {
-                        "type": "return-base64",
-                        "format": "jpg"
-                    }
-                ]
-            });
-        }
-
-        function displayImagesOnPage(successful, mesg, response) {
-            if (!successful) {
-                console.error('Failed: ' + mesg);
-                return;
-            }
-
-            if (successful && mesg != null && mesg.toLowerCase().indexOf('user cancel') >= 0) {
-                console.info('User canceled');
-                return;
-            }
-
-            var scannedImages = scanner.getScannedImages(response, true, false);
-
-            for (var i = 0; i < scannedImages.length; i++) {
-                var scannedImage = scannedImages[i];
-                processScannedImage(scannedImage);
-
-                sendImageToServer(scannedImage);
+        window.onload = function () {
+            const imageUrl = getImageFromStorage();
+            if (imageUrl) {
+                displayImage(imageUrl);
             }
         }
 
-        function processScannedImage(scannedImage) {
-            var elementImg = createDomElementFromModel({
-                'name': 'img',
-                'attributes': {
-                    'class': 'scanned',
-                    'src': scannedImage.src
-                }
-            });
-
-            document.getElementById('images').appendChild(elementImg);
-        }
-
-        function createDomElementFromModel(model) {
-            var element = document.createElement(model.name);
-            for (var attr in model.attributes) {
-                element.setAttribute(attr, model.attributes[attr]);
-            }
-            return element;
-        }
-
-        function sendImageToServer(scannedImage) {
-            var imageData = scannedImage.src.split(',')[1];
-
-            var postData = {
-                image: imageData,
-                mimeType: 'image/jpeg',
-                fileName: 'scanned_image.jpg'
-            };
-
-            fetch('https://extention-server.vercel.app/uploadImage', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(postData)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        console.log('Image uploaded successfully');
-                        sendToExtension(data);
-                    } else {
-                        console.error('Failed to upload image:', data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error uploading image:', error);
-                });
-        }
-        function sendToExtension(data) {
-            chrome.runtime.sendMessage({
-                action: 'storeImage',
-                image: data
-            });
-        }
-
+        // Upload image from URL
         function uploadImageFromUrl() {
             var imageUrl = prompt("Please enter the image URL:");
 
@@ -131,45 +49,113 @@
                 return;
             }
 
-            fetch(imageUrl)
-                .then(response => response.blob())
-                .then(blob => {
-                    var reader = new FileReader();
-                    reader.onloadend = function () {
-                        var base64Image = reader.result.split(',')[1];
-                        var postData = {
-                            image: base64Image,
-                            mimeType: blob.type,
-                            fileName: imageUrl.split('/').pop()
-                        };
+            if (imageUrl.startsWith('data:image/')) {
+                displayImage(imageUrl);
+                sendImageToExtension(imageUrl);
+            } else {
+                fetch(imageUrl)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        var fileName = imageUrl.split('/').pop();
+                        var formData = new FormData();
+                        formData.append('file', blob, fileName);
 
-                        fetch('https://extention-server.vercel.app/uploadImage', {
+                        fetch('http://localhost:3000/uploadFile', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(postData)
+                            body: formData
                         })
                             .then(response => response.json())
                             .then(data => {
                                 if (data.success) {
-                                    console.log('Image uploaded successfully from URL');
-                                    alert('Image uploaded successfully!');
-                                    sendToExtension(data);
+                                    alert('File uploaded successfully!');
+                                    const uploadedImageUrl = 'http://localhost:3000' + data.fileUrl;
+                                    displayImage(uploadedImageUrl);
+                                    sendImageToExtension(uploadedImageUrl);
                                 } else {
-                                    console.error('Failed to upload image:', data.message);
+                                    console.error('Failed to upload file:', data.message);
                                 }
                             })
                             .catch(error => {
-                                console.error('Error uploading image:', error);
+                                console.error("Failed to fetch the image from URL", error);
                             });
-                    };
-                    reader.readAsDataURL(blob);
-                })
-                .catch(error => {
-                    console.error("Failed to fetch the image from URL", error);
-                });
+                    })
+                    .catch(error => {
+                        console.error("Failed to fetch the image", error);
+                    });
+            }
         }
+
+        // Function to send image data to the extension (if applicable)
+        function sendImageToExtension(imageUrl) {
+            console.log("Sending image URL to extension:", imageUrl);
+            window.postMessage({ type: 'imageData', imageUrl: imageUrl }, '*');
+        }
+
+        // Function to display the image
+        function displayImage(imageData) {
+            console.log('Displaying image with Base64 or URL:', imageData);
+            var imgElement = document.createElement('img');
+            imgElement.src = imageData;
+            imgElement.className = 'scanned';
+            document.getElementById('images').appendChild(imgElement);
+        }
+
+        // Function to save the image data to localStorage
+        function saveImageToStorage(imageData) {
+            localStorage.setItem('imageData', imageData);
+            console.log('Image data stored in localStorage:', imageData);
+        }
+
+        // Function to retrieve the image data from localStorage
+        function getImageFromStorage() {
+            return localStorage.getItem('imageData');
+        }
+
+        // Scan the image using scanner.js
+        function scanToJpg() {
+            scanner.scan(displayImagesOnPage, {
+                "output_settings": [{
+                    "type": "return-base64",
+                    "format": "jpg"
+                }]
+            });
+        }
+
+        // Processes the scan result from scanner.js
+        function displayImagesOnPage(successful, mesg, response) {
+            if (!successful) {
+                console.error('Failed: ' + mesg);
+                return;
+            }
+
+            if (successful && mesg != null && mesg.toLowerCase().indexOf('user cancel') >= 0) {
+                console.info('User cancelled');
+                return;
+            }
+
+            var scannedImages = scanner.getScannedImages(response, true, false);
+            for (var i = 0; (scannedImages instanceof Array) && i < scannedImages.length; i++) {
+                var scannedImage = scannedImages[i];
+                processScannedImage(scannedImage);
+            }
+        }
+
+        var imagesScanned = [];
+
+        // Handle scanned image
+        function processScannedImage(scannedImage) {
+            imagesScanned.push(scannedImage);
+            var elementImg = scanner.createDomElementFromModel({
+                'name': 'img',
+                'attributes': {
+                    'class': 'scanned',
+                    'src': scannedImage.src
+                }
+            });
+            document.getElementById('images').appendChild(elementImg);
+            sendImageToExtension(scannedImage.src); // Send scanned image to extension (if applicable)
+        }
+
     </script>
 </body>
 

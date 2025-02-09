@@ -1,69 +1,115 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const multer = require('multer');
 const app = express();
-const port = 6790;
+const port = 4000;
 
-// Middleware Setup
+// Middleware Setup - Allowing CORS for all origins
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// Handling preflight requests (OPTIONS)
+app.options('*', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(200).end();
+});
+
 // JSON parsing middleware
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 
 // Static folder for serving components
-app.use(express.static(path.join(__dirname, 'components')));
+app.use(express.static(path.join(__dirname, '..', 'components')));
 
-// Define the type of the body for the uploadImage route
-interface ImageUploadBody {
-  image: string; // base64 encoded image string
-  mimeType: string; // e.g., 'image/jpeg'
-  fileName: string; // e.g., 'image.jpg'
-}
+// Use memory storage for Multer (in-memory storage instead of disk storage)
+const storage = multer.memoryStorage(); // Store files in memory
 
-// Store the uploaded image in memory (in this example)
-let uploadedImage: { data: string; mimeType: string; fileName: string } | null = null;
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // Maximum file size of 10MB
+});
 
-// Route to upload image
+// Store the uploaded image in memory
+let uploadedImage = { data: null, mimeType: '', fileName: '' };
+let imageTimeout = null;
+
+// Route to upload image (base64 encoded) via JSON
 app.post('/uploadImage', (req, res) => {
-  const { image, mimeType, fileName } = req.body as ImageUploadBody; // Type assertion here
+    const { image, mimeType, fileName } = req.body;
 
-  // Check if the image is provided
-  if (!image) {
-    return res.status(400).json({ success: false, message: 'No image data provided' });
-  }
+    // Check if the image exists
+    if (!image || !image.trim()) {
+        return res.status(400).json({ success: false, message: 'No image data provided' });
+    }
 
-  // Save the uploaded image
-  uploadedImage = {
-    data: image,
-    mimeType: mimeType,
-    fileName: fileName
-  };
+    // Save the uploaded image in memory
+    uploadedImage = { data: image, mimeType: mimeType, fileName: fileName };
 
-  // Send back a successful response
-  res.json({
-    success: true,
-    message: 'Image uploaded successfully',
-    fileName: fileName,
-    mimeType: mimeType,
-    imageUrl: '/image', // URL to access the image
-  });
+    // Set a timeout to delete the image after 5 minutes (300000 ms)
+    if (imageTimeout) {
+        clearTimeout(imageTimeout);  // Clear any previous timeout if a new image is uploaded
+    }
+
+    imageTimeout = setTimeout(() => {
+        uploadedImage = { data: null, mimeType: '', fileName: '' };
+    }, 300000);  // 5 minutes in milliseconds
+
+    // Send back a successful response with the image URL
+    res.json({
+        success: true,
+        message: 'Image uploaded successfully',
+        fileName: fileName,
+        mimeType: mimeType,
+        imageUrl: '/image',
+    });
 });
 
 // Route to retrieve the uploaded image
 app.get('/image', (req, res) => {
-  if (!uploadedImage) {
-    return res.status(404).json({ success: false, message: 'No image uploaded' });
+  console.log(uploadedImage.data);
+    if (!uploadedImage.data) {
+        return res.status(404).json({ success: false, message: 'No image uploaded or image expired' });
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.set('Content-Type', uploadedImage.mimeType);
+    const imageBuffer = Buffer.from(uploadedImage.data, 'base64');
+    res.send(imageBuffer);
+});
+
+// Route to handle file uploads (binary files) using memory storage
+app.post('/uploadFile', upload.single('file'), (req, res) => {
+  if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
 
-  // Set the content type and send the image data as a buffer
-  res.set('Content-Type', uploadedImage.mimeType);
-  const imageBuffer = Buffer.from(uploadedImage.data, 'base64');
-  res.send(imageBuffer);
+  // Send back a successful response with the file URL
+  res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      fileUrl: `/uploads/${req.file.filename}`,
+  });
 });
+
+
+// Send uploaded file info
+app.get('/getUploadedFile', (req, res) => {
+  if (!uploadedImage.data) {
+      return res.status(404).json({ success: false, message: 'No image uploaded or image expired' });
+  }
+
+  res.json({
+      success: true,
+      fileUrl: `/uploads/${uploadedImage.fileName}`,
+      mimeType: uploadedImage.mimeType
+  });
+});
+
 
 // Default route to serve the test page
 app.get('/', (req, res) => {
@@ -78,3 +124,7 @@ app.listen(port, () => {
 });
 
 module.exports = app;
+
+
+
+//data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCE
