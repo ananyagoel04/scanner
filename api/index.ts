@@ -84,6 +84,7 @@ app.get('/image', (req, res) => {
 
 // Route to handle file uploads (binary files) using memory storage
 app.post('/uploadFile', upload.single('file'), (req, res) => {
+    console.log('Incoming file:', req.file);
   if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
