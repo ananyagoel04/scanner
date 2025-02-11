@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload File</title>
+    <script>
+        // Function to handle file upload
+        async function handleFileUpload(event) {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Please select a file to upload.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('asprise_scans', file);  // 'asprise_scans' should match the field name on the server side
+
+            try {
+                console.log('Starting file upload...');
+                const response = await fetch('http://localhost:3000/uploadFile', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                console.log('Response received from the server:', response);
+
+                if (!response.ok) {
+                    // Check if the server returns a JSON response
+                    const errorData = await response.json(); // Parse the error message as JSON
+                    console.error('Error response:', errorData);
+                    throw new Error(`Failed to upload file: ${errorData.message || 'Unknown error'}`);
+                }
+
+                // Check if the response is HTML
+                const contentType = response.headers.get("Content-Type");
+                let responseData = '';
+
+                if (contentType.includes("text/html")) {
+                    responseData = await response.text();  // Handle HTML response
+                    console.log('HTML response:', responseData);
+                    alert("File uploaded successfully! Sending image to extension...");
+                    // You can process or display HTML if needed
+                    // For example, you can redirect the page or extract some data from the HTML
+                } else if (contentType.includes("application/json")) {
+                    // If the response is JSON, handle it as JSON
+                    responseData = await response.json();
+                    console.log('JSON response:', responseData);
+                } else {
+                    console.error('Unexpected content type:', contentType);
+                    alert('Unexpected server response type.');
+                    return;
+                }
+
+                // Now you can perform additional actions based on the response data
+
+            } catch (error) {
+                console.error('Error during file upload:', error);
+                alert(`Error uploading file: ${error.message}`);
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Upload Image</h1>
+
+    <!-- File input and upload button -->
+    <input type="file" id="fileInput" />
+    <button onclick="handleFileUpload()">Upload Image</button>
+</body>
+
+</html>

@@ -56,7 +56,7 @@
                     .then(blob => {
                         var fileName = imageUrl.split('/').pop();
                         var formData = new FormData();
-                        formData.append('file', blob, fileName);
+                        formData.append('asprise_scans', blob, fileName);
 
                         fetch('http://localhost:3000/uploadFile', {
                             method: 'POST',
@@ -101,7 +101,6 @@
         // Function to save the image data to localStorage
         function saveImageToStorage(imageData) {
             localStorage.setItem('imageData', imageData);
-            console.log('Image data stored in localStorage:', imageData);
         }
 
         // Function to retrieve the image data from localStorage
