@@ -9,12 +9,30 @@
 
 <body>
     <h1>Upload Image</h1>
+    
+    <input type="file" name="asprise_scans" id="fileInput" />
+    <br/>
+    <img id="imagePreview" src="" alt="Image Preview" style="display: none; width: 300px; margin-top: 20px;" />
 
-    <!-- Simple form to upload file -->
-    <form action="/uploadFile" method="POST" enctype="multipart/form-data">
-        <input type="file" name="asprise_scans" id="fileInput" />
-        <button type="submit">Upload Image</button>
-    </form>
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+
+        fileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreview.style.display = 'block';  // Show the image
+                };
+
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
 </body>
 
 </html>

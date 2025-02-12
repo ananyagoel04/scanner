@@ -134,10 +134,10 @@ const cleanUpOldFiles = () => {
 setInterval(cleanUpOldFiles, 60 * 60 * 1000);  // Every hour
 
 // Default route for testing
-app.get("/", (req, res) => {
+app.get("/t", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "components", "test.html"));
 });
-app.get("/test", (req, res) => {
+app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "components", "upload.html"));
 });
 app.get("/uploaded", (req, res) => {
