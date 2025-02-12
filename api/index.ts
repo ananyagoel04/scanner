@@ -8,9 +8,17 @@ const port = 1000;
 // Middleware Setup - Allowing CORS for all origins
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      if (origin === "https://asprise.com" || !origin) {
+        callback(null, true);
+      } else {
+        // Reject any other origin
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,  // Important for cookies
   })
 );
 
@@ -19,6 +27,7 @@ app.options("*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.status(200).end();
 });
 
@@ -54,7 +63,6 @@ app.get("/image", (req, res) => {
   res.send(imageBuffer);
 });
 
-let fileaccess = "";
 // Route to handle file uploads (binary files) using memory storage
 app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
   if (!req.file) {
@@ -63,9 +71,19 @@ app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
       .json({ success: false, message: "No file uploaded" });
   }
 
+  // Convert the uploaded file to a base64 string
   const base64File = req.file.buffer.toString("base64");
+
+  // Construct the file URL
   const fileUrl = `data:${req.file.mimetype};base64,${base64File}`;
-  fileaccess = fileUrl;
+
+  // Set the fileUrl in the cookie after successful upload
+  res.cookie('fileUrl', fileUrl, {
+    httpOnly: true,   // Prevent client-side JS access
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'None',
+    maxAge: 3600000,   // 1 hour expiration time for the cookie
+  });
 
   // Send back a successful response with the file URL
   res.json({
@@ -75,19 +93,19 @@ app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
   });
 });
 
-// Send uploaded file info
-app.get("/getUploadedFile", (req, res) => {
-  if (fileaccess=="") {
-    return res
-      .status(404)
-      .json({ success: false, message: "No image uploaded or image expired" });
-  }
 
-  res.json({
-    success: true,
-    fileUrl: fileaccess,
-  });
-});
+// Send uploaded file info
+// app.get("/getUploadedFile", (req, res) => {
+//   if (!file) {
+//     return res
+//       .status(404)
+//       .json({ success: false, message: "No image uploaded or image expired" });
+//   }
+
+//   res.json({
+//     success: true,
+//   });
+// });
 
 // Default route to serve the test page
 app.get("/", (req, res) => {
