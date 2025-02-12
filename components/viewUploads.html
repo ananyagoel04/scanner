@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uploaded Files</title>
+  <style>
+    .file-container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .file-item {
+      margin: 10px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      width: 200px;
+    }
+    .file-item img {
+      max-width: 100%;
+    }
+    .file-item p {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Uploaded Files</h1>
+  <div class="file-container" id="file-container"></div>
+
+  <script>
+    // Fetch the uploaded files from the server
+    fetch('http://localhost:3000/uploadedFiles')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          const fileContainer = document.getElementById('file-container');
+          data.uploadedFiles.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.classList.add('file-item');
+
+            const imgElement = document.createElement('img');
+            imgElement.src = file.fileUrl;
+
+            const fileName = document.createElement('p');
+            fileName.textContent = file.fileName;
+
+            fileItem.appendChild(imgElement);
+            fileItem.appendChild(fileName);
+            fileContainer.appendChild(fileItem);
+          });
+        } else {
+          document.body.innerHTML = '<p>No files uploaded yet.</p>';
+        }
+      })
+      .catch(err => console.error('Error fetching files:', err));
+  </script>
+</body>
+</html>
