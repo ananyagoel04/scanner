@@ -8,28 +8,47 @@
 </head>
 
 <body>
-    <h1>Upload Image</h1>
+    <h1>Upload File</h1>
     
     <input type="file" name="asprise_scans" id="fileInput" />
     <br/>
+
+    <!-- Image Preview -->
     <img id="imagePreview" src="" alt="Image Preview" style="display: none; width: 300px; margin-top: 20px;" />
+
+    <!-- PDF Preview -->
+    <iframe id="pdfPreview" style="display: none; width: 100%; height: 500px; margin-top: 20px;" frameborder="0"></iframe>
 
     <script>
         const fileInput = document.getElementById('fileInput');
         const imagePreview = document.getElementById('imagePreview');
+        const pdfPreview = document.getElementById('pdfPreview');
 
         fileInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
 
             if (file) {
+                const fileType = file.type;
                 const reader = new FileReader();
 
-                reader.onload = function(e) {
-                    imagePreview.src = e.target.result;
-                    imagePreview.style.display = 'block';  // Show the image
-                };
-
-                reader.readAsDataURL(file);
+                // Check if the file is an image or PDF
+                if (fileType.startsWith('image/')) {
+                    // For images
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreview.style.display = 'block';  // Show the image
+                        pdfPreview.style.display = 'none';     // Hide the PDF preview
+                    };
+                    reader.readAsDataURL(file);
+                } else if (fileType === 'application/pdf') {
+                    // For PDFs
+                    const fileURL = URL.createObjectURL(file);
+                    pdfPreview.src = fileURL;
+                    pdfPreview.style.display = 'block';  // Show the PDF
+                    imagePreview.style.display = 'none'; // Hide the image preview
+                } else {
+                    alert('Unsupported file type. Please upload an image or PDF.');
+                }
             }
         });
     </script>
