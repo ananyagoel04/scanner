@@ -1,105 +1,139 @@
 const express = require("express");
 const path = require("path");
-const cors = require("cors");
 const multer = require("multer");
+const fs = require("fs");
 const app = express();
 const port = 1000;
-
-// Middleware Setup - Allowing CORS for all origins
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
-// Handling preflight requests (OPTIONS)
-app.options("*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.status(200).end();
-});
-
-// JSON parsing middleware
-app.use(express.json());
-
-// Static folder for serving components
-app.use(express.static(path.join(__dirname, "..", "components")));
-
-// Use memory storage for Multer (in-memory storage instead of disk storage)
-const storage = multer.memoryStorage(); // Store files in memory
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // Maximum file size of 10MB
-});
-
-// Store the uploaded image in memory
-let uploadedImage = { data: null, mimeType: "", fileName: "" };
-
-// Route to retrieve the uploaded image
-app.get("/image", (req, res) => {
-  console.log(uploadedImage.data);
-  if (!uploadedImage.data) {
-    return res
-      .status(404)
-      .json({ success: false, message: "No image uploaded or image expired" });
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.set("Content-Type", uploadedImage.mimeType);
-  const imageBuffer = Buffer.from(uploadedImage.data, "base64");
-  res.send(imageBuffer);
-});
 
 interface UploadedFile {
   fileName: string;
   mimeType: string;
-  data: Buffer;
+  fileId: string;
+  filePath: string;
+  uploadTime: number;  // Store the upload time
 }
 
+const metadataFilePath = '/tmp/uploadedFiles.json'; // Path for storing file metadata
+
+// Initialize uploadedFiles from the JSON file if it exists
 let uploadedFiles: UploadedFile[] = [];
-// Route to handle file uploads (binary files) using memory storage
+
+if (fs.existsSync(metadataFilePath)) {
+  // Read existing file metadata from the JSON file
+  uploadedFiles = JSON.parse(fs.readFileSync(metadataFilePath, 'utf8'));
+}
+
+// Use Vercel's temporary storage location
+const uploadDir = '/tmp/uploads';  // Vercel's temporary storage location
+
+// Create the uploads directory if it doesn't exist
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+// Configure multer to store files on disk
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir); // Store files in the /tmp/uploads folder
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename based on timestamp
+  },
+});
+
+const upload = multer({ storage: storage, limits: { fileSize: 10 * 1024 * 1024 } }); // Max file size 10MB
+
+// Route to handle file uploads
 app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No file uploaded" });
+    return res.status(400).json({ success: false, message: "No file uploaded" });
   }
-  uploadedFiles.push({
+
+  // Generate a unique file ID for the uploaded file
+  const fileId = Date.now().toString();
+
+  // Log the file data before storing
+  const fileData = {
+    fileId: fileId,
     fileName: req.file.originalname,
     mimeType: req.file.mimetype,
-    data: req.file.buffer.toString("base64"), 
-  });
+    filePath: req.file.path, // Store the path of the file on disk
+    uploadTime: Date.now(),  // Store the time when the file was uploaded
+  };
 
-  const fileUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+  // Store the file's metadata (in-memory and also write to the JSON file)
+  uploadedFiles.push(fileData);
 
-  // Send back a successful response with the file URL
+  // Write the updated metadata to the JSON file
+  fs.writeFileSync(metadataFilePath, JSON.stringify(uploadedFiles, null, 2));
+
   res.json({
     success: true,
     message: "File uploaded successfully",
-    fileUrl: fileUrl,
+    fileId: fileId,  // Send fileId to retrieve it later
   });
 });
 
-// Send uploaded file info
-app.get("/uploadedFiles", (req, res) => {
-  if (uploadedFiles.length === 0) {
-    return res.status(404).json({
-      success: false,
-      message: "No files uploaded yet",
-    });
-  }
-
+// Route to get the list of uploaded files (metadata)
+app.get("/getUploadedFiles", (req, res) => {
+  // Return the list of uploaded files (metadata)
+  const fileMetadata = uploadedFiles.map(file => ({
+    fileId: file.fileId,
+    fileName: file.fileName,
+    mimeType: file.mimeType
+  }));
   res.json({
     success: true,
-    uploadedFiles: uploadedFiles,
+    files: fileMetadata,
   });
 });
 
-// Default route to serve the test page
+// Route to retrieve the uploaded file based on fileId
+app.get("/getFile", (req, res) => {
+  const fileId = req.query.id;
+
+  // Find the file in memory by fileId
+  const file = uploadedFiles.find(f => f.fileId === fileId);
+  
+  if (!file) {
+    return res.status(404).json({ success: false, message: "File not found" });
+  }
+
+  // Read the file from disk
+  fs.readFile(file.filePath, (err, data) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: "Error reading file" });
+    }
+
+    res.setHeader("Content-Type", file.mimeType);  // Set the correct MIME type
+    res.send(data);
+  });
+});
+
+// Function to clean up files that are older than a specific time (e.g., 1 hour)
+const cleanUpOldFiles = () => {
+  const now = Date.now();
+  const expirationTime = 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  uploadedFiles = uploadedFiles.filter((file) => {
+    const fileAge = now - file.uploadTime;
+    if (fileAge > expirationTime) {
+      // Delete the file from disk if it's expired
+      fs.unlinkSync(file.filePath);
+      console.log(`Deleted expired file: ${file.fileName}`);
+      return false;  // Remove from the list of uploaded files
+    }
+    return true;
+  });
+
+  // Save the updated list of files back to the metadata file
+  fs.writeFileSync(metadataFilePath, JSON.stringify(uploadedFiles, null, 2));
+};
+
+// Set up the cleanup interval to run every hour
+setInterval(cleanUpOldFiles, 60 * 60 * 1000);  // Every hour
+
+// Default route for testing
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "components", "test.html"));
 });
@@ -111,11 +145,7 @@ app.get("/uploaded", (req, res) => {
 });
 // Start the server
 app.listen(port, () => {
-  // if (process.env.NODE_ENV === "production") {
-    console.log(`Server running at http://localhost:${port}`);
-  // }
+  console.log(`Server running at http://localhost:${port}`);
 });
 
 module.exports = app;
-
-//data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCE
