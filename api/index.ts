@@ -18,7 +18,7 @@ app.use(
     },
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,  // Important for cookies
+    credentials: true, // Important for cookies
   })
 );
 
@@ -78,11 +78,11 @@ app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
   const fileUrl = `data:${req.file.mimetype};base64,${base64File}`;
 
   // Set the fileUrl in the cookie after successful upload
-  res.cookie('fileUrl', fileUrl, {
-    httpOnly: true,   // Prevent client-side JS access
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'None',
-    maxAge: 3600000,   // 1 hour expiration time for the cookie
+  res.cookie("fileUrl", fileUrl, {
+    httpOnly: true, // Prevent client-side JS access
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "None",
+    maxAge: 3600000, // 1 hour expiration time for the cookie
   });
 
   // Send back a successful response with the file URL
@@ -92,7 +92,6 @@ app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
     fileUrl: fileUrl,
   });
 });
-
 
 // Send uploaded file info
 // app.get("/getUploadedFile", (req, res) => {
@@ -118,7 +117,7 @@ app.get("/test", (req, res) => {
 // Start the server
 app.listen(port, () => {
   // if (process.env.NODE_ENV === "production") {
-    console.log(`Server running at http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
   // }
 });
 
