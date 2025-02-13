@@ -143,17 +143,35 @@ app.get("/proxy", (req, res) => {
     return res.status(400).json({ success: false, message: "No URL provided" });
   }
 
-  // Determine the protocol of the URL (either http or https)
-  const client = targetUrl.startsWith("https") ? https : http;
+  // Decode the URL
+  const decodedUrl = decodeURIComponent(targetUrl);
 
-  client.get(targetUrl, (response) => {
-    // Set the appropriate headers
+  console.log("Decoded URL:", decodedUrl);
+
+  // Determine the protocol
+  const client = decodedUrl.startsWith("https") ? https : http;
+
+  client.get(decodedUrl, (response) => {
+    console.log("Received response from target URL:", decodedUrl);
+
+    // Check if the content-length header exists
+    const contentLength = response.headers["content-length"];
+    
+    if (contentLength) {
+      // If content-length exists, set it
+      res.setHeader("Content-Length", contentLength);
+    } else {
+      // Optionally handle if content-length is missing, for example by setting transfer-encoding
+      res.setHeader("Transfer-Encoding", "chunked");  // Use chunked transfer encoding
+    }
+
+    // Set other necessary headers
     res.setHeader("Content-Type", response.headers["content-type"]);
-    res.setHeader("Content-Length", response.headers["content-length"]);
 
     // Pipe the response to the client
     response.pipe(res);
   }).on("error", (err) => {
+    console.error("Error fetching the file:", err);
     res.status(500).json({ success: false, message: `Error fetching the file: ${err.message}` });
   });
 });
