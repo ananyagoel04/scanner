@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
+const cors = require("cors");
 const app = express();
 const port = 1000;
 const https = require("https");
@@ -12,21 +13,17 @@ interface UploadedFile {
   mimeType: string;
   fileId: string;
   filePath: string;
-  uploadTime: number;  // Store the upload time
+  uploadTime: number;
 }
 
-const metadataFilePath = '/tmp/uploadedFiles.json'; // Path for storing file metadata
+const metadataFilePath = '/tmp/uploadedFiles.json'; 
 
-// Initialize uploadedFiles from the JSON file if it exists
 let uploadedFiles: UploadedFile[] = [];
-
 if (fs.existsSync(metadataFilePath)) {
-  // Read existing file metadata from the JSON file
   uploadedFiles = JSON.parse(fs.readFileSync(metadataFilePath, 'utf8'));
 }
 
-// Use Vercel's temporary storage location
-const uploadDir = '/tmp/uploads';  // Vercel's temporary storage location
+const uploadDir = '/tmp/uploads'; 
 
 // Create the uploads directory if it doesn't exist
 if (!fs.existsSync(uploadDir)) {
@@ -36,14 +33,17 @@ if (!fs.existsSync(uploadDir)) {
 // Configure multer to store files on disk
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadDir); // Store files in the /tmp/uploads folder
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename based on timestamp
+    cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 
 const upload = multer({ storage: storage, limits: { fileSize: 10 * 1024 * 1024 } }); // Max file size 10MB
+
+// Enable CORS for all origins
+app.use(cors()); // Allow all origins by default
 
 // Route to handle file uploads
 app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
@@ -78,7 +78,6 @@ app.post("/uploadFile", upload.single("asprise_scans"), (req, res) => {
 
 // Route to get the list of uploaded files (metadata)
 app.get("/getUploadedFiles", (req, res) => {
-  // Return the list of uploaded files (metadata)
   const fileMetadata = uploadedFiles.map(file => ({
     fileId: file.fileId,
     fileName: file.fileName,
@@ -94,14 +93,12 @@ app.get("/getUploadedFiles", (req, res) => {
 app.get("/getFile", (req, res) => {
   const fileId = req.query.id;
 
-  // Find the file in memory by fileId
   const file = uploadedFiles.find(f => f.fileId === fileId);
   
   if (!file) {
     return res.status(404).json({ success: false, message: "File not found" });
   }
 
-  // Read the file from disk
   fs.readFile(file.filePath, (err, data) => {
     if (err) {
       return res.status(500).json({ success: false, message: "Error reading file" });
@@ -112,30 +109,7 @@ app.get("/getFile", (req, res) => {
   });
 });
 
-// Function to clean up files that are older than a specific time (e.g., 1 hour)
-const cleanUpOldFiles = () => {
-  const now = Date.now();
-  const expirationTime = 60 * 60 * 1000; // 1 hour in milliseconds
-  
-  uploadedFiles = uploadedFiles.filter((file) => {
-    const fileAge = now - file.uploadTime;
-    if (fileAge > expirationTime) {
-      // Delete the file from disk if it's expired
-      fs.unlinkSync(file.filePath);
-      console.log(`Deleted expired file: ${file.fileName}`);
-      return false;  // Remove from the list of uploaded files
-    }
-    return true;
-  });
-
-  // Save the updated list of files back to the metadata file
-  fs.writeFileSync(metadataFilePath, JSON.stringify(uploadedFiles, null, 2));
-};
-
-// Set up the cleanup interval to run every hour
-setInterval(cleanUpOldFiles, 60 * 60 * 1000);  // Every hour
-
-
+// Route to handle proxy requests
 app.get("/proxy", (req, res) => {
   const targetUrl = req.query.url;
 
@@ -143,30 +117,20 @@ app.get("/proxy", (req, res) => {
     return res.status(400).json({ success: false, message: "No URL provided" });
   }
 
-  // Decode the URL
   const decodedUrl = decodeURIComponent(targetUrl);
 
-
-  // Determine the protocol
   const client = decodedUrl.startsWith("https") ? https : http;
 
   client.get(decodedUrl, (response) => {
-
-    // Check if the content-length header exists
     const contentLength = response.headers["content-length"];
     
     if (contentLength) {
-      // If content-length exists, set it
       res.setHeader("Content-Length", contentLength);
     } else {
-      // Optionally handle if content-length is missing, for example by setting transfer-encoding
-      res.setHeader("Transfer-Encoding", "chunked");  // Use chunked transfer encoding
+      res.setHeader("Transfer-Encoding", "chunked");
     }
 
-    // Set other necessary headers
     res.setHeader("Content-Type", response.headers["content-type"]);
-
-    // Pipe the response to the client
     response.pipe(res);
   }).on("error", (err) => {
     console.error("Error fetching the file:", err);
@@ -174,16 +138,6 @@ app.get("/proxy", (req, res) => {
   });
 });
 
-// Default route for testing
-app.get("/t", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "components", "test.html"));
-});
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "components", "upload.html"));
-});
-app.get("/uploaded", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "components", "viewUploads.html"));
-});
 // Start the server
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
