@@ -146,13 +146,11 @@ app.get("/proxy", (req, res) => {
   // Decode the URL
   const decodedUrl = decodeURIComponent(targetUrl);
 
-  console.log("Decoded URL:", decodedUrl);
 
   // Determine the protocol
   const client = decodedUrl.startsWith("https") ? https : http;
 
   client.get(decodedUrl, (response) => {
-    console.log("Received response from target URL:", decodedUrl);
 
     // Check if the content-length header exists
     const contentLength = response.headers["content-length"];
