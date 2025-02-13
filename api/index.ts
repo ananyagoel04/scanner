@@ -4,6 +4,8 @@ const multer = require("multer");
 const fs = require("fs");
 const app = express();
 const port = 1000;
+const https = require("https");
+const http = require("http");
 
 interface UploadedFile {
   fileName: string;
@@ -132,6 +134,29 @@ const cleanUpOldFiles = () => {
 
 // Set up the cleanup interval to run every hour
 setInterval(cleanUpOldFiles, 60 * 60 * 1000);  // Every hour
+
+
+app.get("/proxy", (req, res) => {
+  const targetUrl = req.query.url;
+
+  if (!targetUrl) {
+    return res.status(400).json({ success: false, message: "No URL provided" });
+  }
+
+  // Determine the protocol of the URL (either http or https)
+  const client = targetUrl.startsWith("https") ? https : http;
+
+  client.get(targetUrl, (response) => {
+    // Set the appropriate headers
+    res.setHeader("Content-Type", response.headers["content-type"]);
+    res.setHeader("Content-Length", response.headers["content-length"]);
+
+    // Pipe the response to the client
+    response.pipe(res);
+  }).on("error", (err) => {
+    res.status(500).json({ success: false, message: `Error fetching the file: ${err.message}` });
+  });
+});
 
 // Default route for testing
 app.get("/t", (req, res) => {
